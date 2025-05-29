@@ -159,6 +159,28 @@ function App() {
     }
   }
 
+  // New: handle drag from foundation to tableau
+  function handleFoundationToTableauDrop(suit, targetPileIdx) {
+    const foundationPile = foundations[suit];
+    if (foundationPile.length === 0) return;
+
+    const card = foundationPile[foundationPile.length - 1];
+    const targetPile = tableau[targetPileIdx];
+    const targetTopCard = targetPile.length > 0 ? targetPile[targetPile.length - 1] : null;
+
+    if (canPlaceOnTableau(card, targetTopCard)) {
+      saveUndoState();
+
+      // Remove card from foundation
+      const newFoundationPile = foundationPile.slice(0, foundationPile.length - 1);
+      setFoundations({ ...foundations, [suit]: newFoundationPile });
+
+      // Add card to tableau pile
+      const newTargetPile = [...targetPile, { ...card, faceUp: true }];
+      setTableau(tableau.map((p, i) => (i === targetPileIdx ? newTargetPile : p)));
+    }
+  }
+
   const getCardColor = (suit) => (suit === "hearts" || suit === "diamonds") ? "red" : "black";
 
   return (
@@ -195,29 +217,56 @@ function App() {
         </div>
 
         <div style={{ display: "flex", gap: 10 }}>
-          {Object.keys(foundations).map((suit, idx) => (
-            <div
-              key={idx}
-              onDrop={e => {
-                e.preventDefault();
-                handleFoundationDrop(suit);
-                setSelection(null);
-              }}
-              onDragOver={e => e.preventDefault()}
-              style={{
-                width: 60,
-                height: 90,
-                border: "1px solid black",
-                backgroundColor: "lightyellow",
-                textAlign: "center",
-                lineHeight: "90px",
-                color: foundations[suit].length > 0 ? getCardColor(foundations[suit][foundations[suit].length - 1].suit) : "black",
-                fontWeight: "bold"
-              }}
-            >
-              {foundations[suit].length > 0 ? `${foundations[suit].slice(-1)[0].rank} ${suit[0].toUpperCase()}` : suit[0].toUpperCase()}
-            </div>
-          ))}
+          {Object.keys(foundations).map((suit, idx) => {
+            const foundationPile = foundations[suit];
+            const topCard = foundationPile.length > 0 ? foundationPile[foundationPile.length - 1] : null;
+
+            return (
+              <div
+                key={idx}
+                onDrop={e => {
+                  e.preventDefault();
+                  handleFoundationDrop(suit);
+                  setSelection(null);
+                }}
+                onDragOver={e => e.preventDefault()}
+                style={{
+                  width: 60,
+                  height: 90,
+                  border: "1px solid black",
+                  backgroundColor: "lightyellow",
+                  textAlign: "center",
+                  lineHeight: "90px",
+                  color: foundationPile.length > 0 ? getCardColor(topCard.suit) : "black",
+                  fontWeight: "bold",
+                  position: "relative",
+                }}
+              >
+                {topCard ? (
+                  <div
+                    draggable
+                    onDragStart={e => {
+                      e.dataTransfer.setData("text/plain", JSON.stringify({ type: "foundation", suit }));
+                      setSelection({ type: "foundation", suit });
+                    }}
+                    style={{
+                      width: 60,
+                      height: 90,
+                      cursor: "pointer",
+                      color: getCardColor(topCard.suit),
+                      userSelect: "none",
+                      fontWeight: "bold",
+                      lineHeight: "90px",
+                    }}
+                  >
+                    {`${topCard.rank} ${suit[0].toUpperCase()}`}
+                  </div>
+                ) : (
+                  suit[0].toUpperCase()
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -232,6 +281,8 @@ function App() {
                 handleTableauDrop(data.pileIdx, data.cardIdx, pileIdx);
               } else if (data.type === "waste") {
                 handleWasteDrop(pileIdx);
+              } else if (data.type === "foundation") {
+                handleFoundationToTableauDrop(data.suit, pileIdx);
               }
               setSelection(null);
             }}
