@@ -30,6 +30,7 @@ function App() {
   });
   const [selection, setSelection] = useState(null);
   const [hasWon, setHasWon] = useState(false);
+  const [undoState, setUndoState] = useState(null);
 
   useEffect(() => {
     const deck = generateDeck();
@@ -48,51 +49,27 @@ function App() {
     setHasWon(won);
   }, [foundations]);
 
-  useEffect(() => {
-    if (hasWon) return;
-
-    let moved = false;
-
-    const tryAutoMoveToFoundation = (card, from, updateSource) => {
-      if (!card) return false;
-      const foundationPile = foundations[card.suit];
-      if (isNextFoundationCard(card, foundationPile)) {
-        const newFoundations = {
-          ...foundations,
-          [card.suit]: [...foundationPile, card],
-        };
-        setFoundations(newFoundations);
-        updateSource();
-        moved = true;
-        return true;
-      }
-      return false;
-    };
-
-    if (waste.length > 0) {
-      const card = waste[waste.length - 1];
-      tryAutoMoveToFoundation(card, "waste", () => setWaste(waste.slice(0, -1)));
-    }
-
-    tableau.forEach((pile, i) => {
-      if (pile.length === 0) return;
-      const card = pile[pile.length - 1];
-      tryAutoMoveToFoundation(card, "tableau", () => {
-        const newPile = pile.slice(0, -1);
-        if (newPile.length > 0 && !newPile[newPile.length - 1].faceUp) {
-          newPile[newPile.length - 1] = { ...newPile[newPile.length - 1], faceUp: true };
-        }
-        const newTableau = tableau.map((p, idx) => idx === i ? newPile : p);
-        setTableau(newTableau);
-      });
+  function saveUndoState() {
+    setUndoState({
+      tableau: JSON.parse(JSON.stringify(tableau)),
+      stock: JSON.parse(JSON.stringify(stock)),
+      waste: JSON.parse(JSON.stringify(waste)),
+      foundations: JSON.parse(JSON.stringify(foundations)),
     });
+  }
 
-    if (moved) {
-      setTimeout(() => {}, 100);
+  function handleUndo() {
+    if (undoState) {
+      setTableau(undoState.tableau);
+      setStock(undoState.stock);
+      setWaste(undoState.waste);
+      setFoundations(undoState.foundations);
+      setUndoState(null);
     }
-  }, [tableau, waste, foundations, hasWon]);
+  }
 
   function onStockClick() {
+    saveUndoState();
     if (stock.length === 0) {
       setStock(waste.map(card => ({ ...card, faceUp: false })).reverse());
       setWaste([]);
@@ -124,6 +101,7 @@ function App() {
     const targetTopCard = targetPile.length > 0 ? targetPile[targetPile.length - 1] : null;
 
     if (canPlaceOnTableau(movingCards[0], targetTopCard)) {
+      saveUndoState();
       const newSourcePile = sourcePile.slice(0, sourceCardIdx);
       if (newSourcePile.length > 0) {
         const topCard = newSourcePile[newSourcePile.length - 1];
@@ -145,6 +123,7 @@ function App() {
     const targetTopCard = targetPile.length > 0 ? targetPile[targetPile.length - 1] : null;
 
     if (canPlaceOnTableau(card, targetTopCard)) {
+      saveUndoState();
       const newTargetPile = [...targetPile, card];
       const newWaste = waste.slice(0, -1);
 
@@ -157,6 +136,7 @@ function App() {
     if (selection?.type === "waste" && waste.length > 0) {
       const card = waste[waste.length - 1];
       if (card.suit === suit && isNextFoundationCard(card, foundations[suit])) {
+        saveUndoState();
         setFoundations({ ...foundations, [suit]: [...foundations[suit], card] });
         setWaste(waste.slice(0, -1));
       }
@@ -166,6 +146,7 @@ function App() {
       const card = sourcePile[cardIdx];
 
       if (card.suit === suit && cardIdx === sourcePile.length - 1 && isNextFoundationCard(card, foundations[suit])) {
+        saveUndoState();
         const newFoundations = { ...foundations, [suit]: [...foundations[suit], card] };
         const newPile = sourcePile.slice(0, cardIdx);
         if (newPile.length > 0 && !newPile[newPile.length - 1].faceUp) {
@@ -183,6 +164,8 @@ function App() {
   return (
     <div style={{ padding: 20 }}>
       {hasWon && <h2>You Win!</h2>}
+
+      <button onClick={handleUndo} disabled={!undoState}>Undo</button>
 
       <div style={{ display: "flex", gap: 20, marginBottom: 20 }}>
         <div
